@@ -30,6 +30,12 @@ BROKER_SSH_PUBLIC_KEY = os.environ["BROKER_SSH_PUBLIC_KEY"]
 BROKER_SSH_PRIVATE_KEY_PATH = os.environ["BROKER_SSH_PRIVATE_KEY_PATH"]
 
 
+@app.get("/")
+def root() -> dict:
+    """Health check: Render probes this path to decide the deploy is live."""
+    return {"status": "ok", "service": "gpu-broker-api"}
+
+
 def get_user_id(authorization: str = Header(...)) -> str:
     """Auth: the CLI sends `Authorization: Bearer <api_key>`. We hash the
     token and look it up against `users.api_key_hash` in Supabase.
@@ -148,6 +154,7 @@ def run_job(req: RunJobRequest, background_tasks: BackgroundTasks,
         provider_cost_per_hour=result.offer.price_per_hour,
         benchmark_power_watts=result.benchmark_power_watts,
         benchmark_tflops=result.benchmark_tflops,
+        max_hours=req.max_hours,
     )
 
     return {
