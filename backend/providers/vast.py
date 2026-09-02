@@ -1,11 +1,12 @@
 """
 Vast.ai adapter.
 
-Uses the official `vastai` PyPI package (`pip install vastai`), which wraps
-Vast's REST API (bearer-token auth, base https://console.vast.ai/api/v0/).
-This is the same package/pattern SkyPilot itself uses under the hood
-(sky/provision/vast/utils.py) — confirmed against the vendored SkyPilot repo,
-not guessed.
+Uses Vast's public REST API v0 directly via `requests` (bearer-token
+auth, base https://console.vast.ai/api/v0/). The official `vastai`
+PyPI package wraps the same API, but its `import_cli_functions()` reads
+`func.signature`, which crashes on Python >= 3.11 - so we call the
+API ourselves, hitting the exact same endpoints the packaged CLI does
+(`PUT /search/asks/`, `PUT /asks/{id}/`, `GET|DELETE /instances/{id}/`).
 
 Docs: https://docs.vast.ai/api-reference/introduction
 Get API key: https://cloud.vast.ai/api/  (Account -> API Keys)
@@ -16,17 +17,16 @@ from __future__ import annotations
 import os
 from typing import Optional
 
+import requests
+
 from .base import Instance, Offer, ProviderAdapter, ProviderError
 
-try:
-    from vastai import VastAI  # pip install vastai
-except ImportError:  # pragma: no cover - allows spec/tests to import module
-    VastAI = None  # type: ignore
-
+_BASE_URL = "https://console.vast.ai/api/v0"
 
 # Vast's own GPU-name strings differ slightly from the normalized names we
-# use elsewhere (e.g. "RTX_4090" not "RTX 4090"). Keep this map small and
-# grow it as you add GPU models to your catalog.
+# use elsewhere (e.g. "RTX_4090" not "RTX 4090"). Keep this map small
+# and grow it as you add GPU models to your catalog.
+
 _GPU_NAME_MAP = {
     "RTX_4090": "RTX 4090",
     "H100_SXM": "H100 SXM",
@@ -38,15 +38,36 @@ class VastAdapter(ProviderAdapter):
     name = "vast"
 
     def __init__(self, api_key: Optional[str] = None):
-        if VastAI is None:
-            raise ImportError("pip install vastai")
-        self._client = VastAI(api_key=api_key or os.environ["VAST_API_KEY"])
+        self._api_key = api_key or os.environ["VAST_API_KEY"]
+
+    def _request(self, method: str, path: str, **kwargs) -> requests.Response:
+        resp = requests.request(
+            method,
+            _BASE_URL + path,
+            headers={"Authorization": "Bearer " + self._api_key},
+            timeout=60,
+            **kwargs,
+        )
+        if resp.status_code != 200:
+            raise ProviderError(
+                f"vast {method} {path} failed: HTTP {resp.status_code}: {resp.text[:300]}"
+            )
+        return resp
 
     def search_offers(self, gpu_model: str, num_gpus: int = 1) -> list[Offer]:
         vast_gpu_name = _GPU_NAME_MAP.get(gpu_model, gpu_model)
-        query = f'gpu_name="{vast_gpu_name}" num_gpus={num_gpus} rentable=true'
+
+        # Vast's search endpoint expects a q dict (same shape the CLI sends)。
+        q = {
+            "gpu_name": {"eq": vast_gpu_name},
+            "num_gpus": {"eq": num_gpus},
+            "rentable": {"eq": True},
+            "order": [["dph_total", "asc"]],
+        }
+        payload = {"q": q}
         try:
-            offers = self._client.search_offers(query=query, order="dph_total")
+            resp = self._request("PUT", "/search/asks/", json=payload)
+            offers = resp.json()["offers"]
         except Exception as e:  # noqa: BLE001 - provider SDK exceptions vary
             raise ProviderError(f"vast search_offers failed: {e}") from e
 
@@ -65,17 +86,20 @@ class VastAdapter(ProviderAdapter):
 
     def create_instance(self, offer: Offer, ssh_public_key: str,
                          image: str = "pytorch/pytorch") -> Instance:
+
+        body = {
+            "image": image,
+            "ssh": True,
+            "direct": True,
+            "disk": 32,
+            "public_key": ssh_public_key,
+        }
         try:
-            result = self._client.create_instance(
-                id=int(offer.offer_id),
-                image=image,
-                ssh=True,
-                direct=True,
-                disk=32,
-            )
+            resp = self._request("PUT", f"/asks/{offer.offer_id}/", json=body)
+            result = resp.json()
         except Exception as e:  # noqa: BLE001
-            # THIS is the live-probe failing — ghost inventory, price moved,
-            # someone else grabbed it first, etc. The broker catches this.
+            # THIS is the live-probe failing - ghost inventory, price moved,
+            # someone else grabbed it first,, etc. The broker catches this.
             raise ProviderError(f"vast create_instance failed for offer "
                                  f"{offer.offer_id}: {e}") from e
 
@@ -83,8 +107,9 @@ class VastAdapter(ProviderAdapter):
         return Instance(provider=self.name, instance_id=new_id, status="pending")
 
     def get_instance_status(self, instance_id: str) -> Instance:
+
         try:
-            info = self._client.show_instance(id=int(instance_id))
+            info = self._request("GET", f"/instances/{instance_id}/").json()
         except Exception as e:  # noqa: BLE001
             raise ProviderError(f"vast show_instance failed: {e}") from e
 
@@ -99,9 +124,9 @@ class VastAdapter(ProviderAdapter):
 
     def destroy_instance(self, instance_id: str) -> None:
         try:
-            self._client.destroy_instance(id=int(instance_id))
+            self._request("DELETE", f"/instances/{instance_id}/", json={})
         except Exception:  # noqa: BLE001
-            # Destroy must be idempotent from the broker's perspective —
-            # log this server-side, don't raise, so cleanup-on-failure
-            # paths never themselves fail.
+            # Destroy must be idempotent from the broker's perspective -
+            # log this server-side,, don't raise,, so cleanup-on-failure
+            # paths never themselves fail..
             pass

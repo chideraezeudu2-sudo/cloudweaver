@@ -25,8 +25,8 @@ class Settings(BaseSettings):
     digitalocean_token: str = ""
 
     # --- Pricing ---
-    # Fraction of live cost added as your margin, e.g. 0.35 = cost * 1.35
-    default_margin: float = 0.35
+    # Fraction of live cost added as your margin, e.g. 0.30 = cost * 1.30
+    default_margin: float = 0.30
     # Absolute minimum margin per GPU-hour in USD, protects against
     # razor-thin spreads on already-cheap cards.
     min_margin_usd_per_hr: float = 0.03
