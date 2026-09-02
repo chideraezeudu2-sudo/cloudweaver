@@ -8,9 +8,12 @@ Run locally: uvicorn main:app --reload
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
+import urllib.request
 import uuid
+from contextlib import asynccontextmanager
 from typing import Optional
 
 import stripe
@@ -19,15 +22,70 @@ from pydantic import BaseModel
 
 from core import db, wallet
 from core.broker import NoCapacityAvailable, quote_and_reserve
+from core.metering import meter_once
 
 logging.basicConfig(level=logging.INFO)
-app = FastAPI(title="GPU Broker API")
+logger = logging.getLogger("gpu-broker")
+
+# In-app metering loop (BUILD_SPEC §5, free-tier variant). Because Render's
+# free web services spin down after 15 min of no inbound traffic, we:
+#   1. run meter_once() every 5 minutes in a background task, and
+#   2. self-ping /health every 4 minutes so the container never hits
+#      the idle spin-down in the normal case.
+# After a Render restart/cold-start the first pass catches up the whole
+# elapsed interval from last_metered_at (no double-bill, worst case ~5 min
+# extra unmetered after a crash -- a rounding error at these prices, per spec.
+METER_INTERVAL_SECONDS = 300
+KEEPALIVE_INTERVAL_SECONDS = 240
+
+
+async def _meter_loop():
+    while True:
+        try:
+            await asyncio.to_thread(meter_once)
+        except Exception:  # noqa: BLE001
+            logger.exception("metering pass failed -- will retry next interval")
+        await asyncio.sleep(METER_INTERVAL_SECONDS)
+
+
+async def _keepalive_loop():
+    while True:
+        await asyncio.sleep(KEEPALIVE_INTERVAL_SECONDS)
+        try:
+            urllib.request.urlopen("http://127.0.0.1/health", timeout=10)
+        except Exception:  # noqa: BLE001
+            logger.warning("self-health ping failed", exc_info=True)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    tasks = [
+        asyncio.create_task(_meter_loop()),
+        asyncio.create_task(_keepalive_loop()),
+    ]
+    logger.info("metering loop started (every %ss;keepalive every %ss)",
+                 METER_INTERVAL_SECONDS, KEEPALIVE_INTERVAL_SECONDS)
+    try:
+        yield
+    finally:
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
+app = FastAPI(title="GPU Broker API", lifespan=lifespan)
 
 # Path to a broker-owned SSH keypair used to access every instance we
 # provision, across all providers -- generate this once during deploy
 # setup (see BUILD_SPEC.md), not per-customer.
 BROKER_SSH_PUBLIC_KEY = os.environ["BROKER_SSH_PUBLIC_KEY"]
 BROKER_SSH_PRIVATE_KEY_PATH = os.environ["BROKER_SSH_PRIVATE_KEY_PATH"]
+
+
+@app.get("/health")
+def health() -> dict:
+    """Health: also used by the in-app keepalive loop."""
+    return {"status": "ok", "service": "gpu-broker-api"}
 
 
 @app.get("/")
