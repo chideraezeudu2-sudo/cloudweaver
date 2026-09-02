@@ -1,0 +1,65 @@
+# Render blueprint: GPU Broker backend web service + 5-minute metering cron.
+# See BUILD_SPEC.md §1.9, §2, §5.
+#
+# Deploy: connect this repo to Render, then apply this blueprint, or create
+# the two resources manually with these settings.
+
+services:
+  - type: web
+    name: gpu-broker-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    plan: free
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: VAST_API_KEY
+        sync: false
+      - key: RUNPOD_API_KEY
+        sync: false
+      - key: BROKER_SSH_PUBLIC_KEY
+        sync: false
+      - key: BROKER_SSH_PRIVATE_KEY_PATH
+        value: /etc/secrets/broker_key
+    disk:
+      name: broker-secrets
+      mountPath: /etc/secrets
+      sizeGB: 1
+
+  - type: cron
+    name: gpu-broker-metering
+    runtime: python
+    rootDir: backend
+    schedule: "*/5 * * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m core.metering
+    plan: free
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: VAST_API_KEY
+        sync: false
+      - key: RUNPOD_API_KEY
+        sync: false
+      - key: BROKER_SSH_PUBLIC_KEY
+        sync: false
+      - key: BROKER_SSH_PRIVATE_KEY_PATH
+        value: /etc/secrets/broker_key
+    disk:
+      name: broker-secrets
+      mountPath: /etc/secrets
+      sizeGB: 1

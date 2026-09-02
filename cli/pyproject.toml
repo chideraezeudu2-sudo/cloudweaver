@@ -1,0 +1,16 @@
+[project]
+name = "gpu-deploy"
+version = "0.1.0"
+description = "Rent the cheapest verified-available GPU from your terminal"
+requires-python = ">=3.9"
+dependencies = [
+    "click==8.1.7",
+    "requests==2.32.3",
+]
+
+[project.scripts]
+gpu-deploy = "gpu_deploy_cli.cli:cli"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
