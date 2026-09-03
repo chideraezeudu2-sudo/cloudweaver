@@ -36,16 +36,26 @@ def create_user_with_api_key(email: str) -> tuple[str, str]:
     """Create a users row + wallet, return (user_id, raw_api_key).
 
     The raw key is returned exactly once here; only its hash is stored.
+
+    Raises ValueError if the email is already registered.
     """
     raw_key = generate_api_key()
     user_id = str(uuid.uuid4())
     db = get_supabase()
 
-    db.table("users").insert({
-        "id": user_id,
-        "email": email,
-        "api_key_hash": hash_api_key(raw_key),
-    }).execute()
+    try:
+        db.table("users").insert({
+            "id": user_id,
+            "email": email,
+            "api_key_hash": hash_api_key(raw_key),
+        }).execute()
+    except Exception as e:
+        # 23505 = unique_violation (email already registered. The wallet
+        # insert would fail too, so abort before creating one..
+        if "23505" in str(e):
+            raise ValueError("email already registered") from e
+        raise
+
     db.table("wallets").insert({
         "user_id": user_id,
         "balance_usd": 0,

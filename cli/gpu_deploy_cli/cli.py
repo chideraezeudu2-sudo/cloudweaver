@@ -115,7 +115,7 @@ def run(gpu_model: str, num_gpus: int, image: str, max_hours: float):
 def jobs():
     """List your recent jobs and their cost."""
     resp = _api("GET", "/jobs")
-    for job in resp.json():
+    for job in resp.json()["jobs"]:
         click.echo(f"{job['id'][:8]}  {job['provider']:12}  "
                    f"{job['gpu_model']:10}  ${job['price_per_hour']:.3f}/hr  "
                    f"{job['status']}")
