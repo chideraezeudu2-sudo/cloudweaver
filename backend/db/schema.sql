@@ -42,7 +42,8 @@ create table jobs (
     status text not null default 'running',   -- 'running' | 'completed' | 'terminated_no_balance' | 'failed'
     started_at timestamptz not null default now(),
     last_metered_at timestamptz not null default now(),  -- end of last billed interval
-    ended_at timestamptz
+    ended_at timestamptz,
+    low_balance_warning boolean not null default false  -- set by the metering loop when a running job's balance is projected to run out soon
 );
 
 create index jobs_status_idx on jobs (status);
@@ -58,15 +59,31 @@ create table provider_outcomes (
     created_at timestamptz not null default now()
 );
 
+-- Prevent double-crediting on a webhook retry/replay (Paddle, or any
+-- future payment processor, retries failed deliveries by design -- this
+-- makes credit_wallet safe to call twice with the same session id).
+create unique index ledger_entries_stripe_session_id_unique
+  on ledger_entries (stripe_session_id)
+  where stripe_session_id is not null;
+
 create or replace function credit_wallet(
     p_user_id uuid, p_amount numeric, p_stripe_session_id text
 ) returns void as $$
+declare
+    v_inserted_id uuid;
 begin
-    insert into wallets (user_id, balance_usd) values (p_user_id, p_amount)
-    on conflict (user_id) do update set balance_usd = wallets.balance_usd + p_amount;
-
+    -- Only increment the balance if this session id hasn't been recorded
+    -- before -- a retried/replayed webhook for the same transaction is a
+    -- silent no-op instead of a double credit.
     insert into ledger_entries (user_id, amount_usd, kind, stripe_session_id)
-    values (p_user_id, p_amount, 'stripe_topup', p_stripe_session_id);
+    values (p_user_id, p_amount, 'stripe_topup', p_stripe_session_id)
+    on conflict (stripe_session_id) do nothing
+    returning id into v_inserted_id;
+
+    if v_inserted_id is not null then
+        insert into wallets (user_id, balance_usd) values (p_user_id, p_amount)
+        on conflict (user_id) do update set balance_usd = wallets.balance_usd + p_amount;
+    end if;
 end;
 $$ language plpgsql;
 
