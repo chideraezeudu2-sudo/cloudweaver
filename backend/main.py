@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from paddle_billing.Notifications import Secret, Verifier
 from pydantic import BaseModel
 
@@ -102,6 +103,56 @@ def health() -> dict:
 def root() -> dict:
     """Health check: Render probes this path to decide the deploy is live."""
     return {"status": "ok", "service": "gpu-broker-api"}
+
+
+PADDLE_CLIENT_TOKEN = os.environ.get("PADDLE_CLIENT_TOKEN", "")
+
+
+@app.get("/pay", response_class=HTMLResponse)
+def pay_page() -> str:
+    """
+    Paddle's default payment link (set in the Paddle dashboard's Checkout
+    Settings) must point HERE, not at the bare API root -- Paddle appends
+    `?_ptxn=txn_...` to whatever URL is configured there, and that page
+    must load Paddle.js for a checkout to actually render. The API root
+    only ever served JSON, which is why checkout URLs returned by
+    /wallet/add-funds loaded a blank JSON blob instead of a payment form
+    (found and diagnosed by OpenHands against Paddle's own documented
+    default-payment-link behavior).
+
+    Per Paddle's docs, Paddle.js auto-detects a `_ptxn` transaction id in
+    the page's own URL and opens the checkout for it automatically once
+    initialized -- this page does nothing but load and initialize
+    Paddle.js; it doesn't need to read the query param itself. That
+    auto-open behavior is documented but has not been exercised against
+    a real browser here -- confirm it actually renders before trusting
+    this as fully done, same as everything else flagged along the way.
+    """
+    if not PADDLE_CLIENT_TOKEN:
+        return (
+            "<h1>Checkout misconfigured</h1>"
+            "<p>PADDLE_CLIENT_TOKEN is not set on the server. This is a "
+            "different value than PADDLE_API_KEY -- generate a Client-side "
+            "Token (not an API key) in the Paddle dashboard under "
+            "Developer Tools &rarr; Authentication, and set it as an env "
+            "var.</p>"
+        )
+    is_sandbox = os.environ.get("PADDLE_ENV", "sandbox") == "sandbox"
+    return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Complete your payment</title></head>
+<body>
+  <p>Loading checkout&hellip;</p>
+  <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
+  <script>
+    {"Paddle.Environment.set('sandbox');" if is_sandbox else ""}
+    Paddle.Initialize({{ token: "{PADDLE_CLIENT_TOKEN}" }});
+    // Paddle.js reads `_ptxn` from this page's own URL automatically and
+    // opens the matching checkout once initialized -- no manual call
+    // needed here per Paddle's documented default-payment-link behavior.
+  </script>
+</body>
+</html>"""
 
 
 def get_user_id(authorization: str = Header(...)) -> str:
