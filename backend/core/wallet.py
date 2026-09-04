@@ -24,6 +24,7 @@ or the backend's own job-metering loop, never from a webpage.
 
 from __future__ import annotations
 
+import logging
 import os
 
 from paddle_billing import Client, Environment, Options
@@ -94,17 +95,33 @@ def create_checkout_session(user_id: str, tier_usd: int) -> str:
     return txn.checkout.url
 
 
+logger = logging.getLogger("wallet")
+
+
 def handle_transaction_completed_webhook(payload: dict) -> None:
     """Call this from your Paddle webhook endpoint (see main.py), AFTER
     verifying the Paddle-Signature header. Credits the wallet ONLY on a
     confirmed `transaction.completed` event, using grand_total (what the
     customer actually paid, including tax) -- never trust a client-side
     'I paid' signal.
+
+    A transaction with no custom_data.user_id is logged and ignored, not
+    raised -- confirmed against a real Paddle example payload that this
+    field can legitimately be absent (e.g. a transaction that didn't
+    originate from our own create_checkout_session call). Raising here
+    would turn into a 500 on the webhook endpoint, and Paddle retries
+    failed webhook deliveries -- for an event we can never resolve
+    (no user_id to credit), that just retries forever for no benefit.
     """
     data = payload["data"]
     user_id = (data.get("custom_data") or {}).get("user_id")
     if not user_id:
-        raise ValueError(f"transaction {data.get('id')} has no user_id in custom_data")
+        logger.warning(
+            "transaction %s has no user_id in custom_data -- ignoring "
+            "(not one of our checkout sessions, or a non-checkout event)",
+            data.get("id"),
+        )
+        return
 
     grand_total_minor = int(data["details"]["totals"]["grand_total"])
     amount_usd = grand_total_minor / 100
