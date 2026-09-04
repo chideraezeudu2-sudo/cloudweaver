@@ -1,16 +1,18 @@
 """
-Central place that knows about all five providers. The broker never
-imports a provider module directly -- it goes through this registry, so
-adding a 6th provider later means writing one adapter file and adding one
-line here, nothing else changes.
+Central place that knows about active providers. The broker never
+imports a provider module directly -- it goes through this registry.
+
+LAUNCH SCOPE: only Vast.ai + RunPod are active. Both let you generate an
+API key with zero deposit, unlike Lambda Labs/DigitalOcean (require a
+funded payment method) and Crusoe (enterprise-ish onboarding, and its
+adapter isn't finished -- see providers/crusoe.py). Their adapter files
+are left in the repo for a fast-follow once there's revenue to fund those
+accounts -- re-enabling one is a one-line change here, nothing else.
 """
 
 from __future__ import annotations
 
 from .base import ProviderAdapter
-from .crusoe import CrusoeAdapter
-from .digitalocean import DigitalOceanAdapter
-from .lambda_labs import LambdaLabsAdapter
 from .runpod import RunPodAdapter
 from .vast import VastAdapter
 
@@ -19,9 +21,9 @@ from .vast import VastAdapter
 _ADAPTER_CLASSES = {
     "vast": VastAdapter,
     "runpod": RunPodAdapter,
-    "lambda_labs": LambdaLabsAdapter,
-    "crusoe": CrusoeAdapter,
-    "digitalocean": DigitalOceanAdapter,
+    # "lambda_labs": LambdaLabsAdapter,   # deferred -- needs funded account
+    # "crusoe": CrusoeAdapter,            # deferred -- adapter unfinished
+    # "digitalocean": DigitalOceanAdapter,  # deferred -- needs funded account
 }
 
 

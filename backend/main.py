@@ -16,8 +16,8 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Optional
 
-import stripe
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
+from paddle_billing.Notifications import Secret, Verifier
 from pydantic import BaseModel
 
 from core import db, wallet
@@ -48,13 +48,23 @@ async def _meter_loop():
         await asyncio.sleep(METER_INTERVAL_SECONDS)
 
 
+PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://gpu-broker-api.onrender.com")
+
+
 async def _keepalive_loop():
+    # IMPORTANT: this must hit the PUBLIC url, not localhost/127.0.0.1.
+    # Render's spin-down timer only resets on inbound traffic that arrives
+    # through its edge/router -- a loopback request from inside the same
+    # container never leaves the box and does not count, so this would
+    # silently fail to prevent spin-down if pointed at localhost.
     while True:
         await asyncio.sleep(KEEPALIVE_INTERVAL_SECONDS)
         try:
-            urllib.request.urlopen("http://127.0.0.1/health", timeout=10)
+            await asyncio.to_thread(
+                urllib.request.urlopen, f"{PUBLIC_URL}/health", None, 15)
         except Exception:  # noqa: BLE001
-            logger.warning("self-health ping failed", exc_info=True)
+            logger.warning("self-health ping to %s failed", PUBLIC_URL,
+                            exc_info=True)
 
 
 @asynccontextmanager
@@ -131,14 +141,17 @@ def signup(req: SignupRequest) -> dict:
 
 
 class AddFundsRequest(BaseModel):
-    amount_usd: float
+    # Paddle's catalog model wants one of the pre-defined tiers, not a
+    # freeform typed-in amount -- see wallet.PADDLE_PRICE_IDS.
+    tier_usd: int
 
 
 @app.post("/wallet/add-funds")
 def add_funds(req: AddFundsRequest, user_id: str = Depends(get_user_id)):
-    if req.amount_usd < 5:
-        raise HTTPException(400, "minimum top-up is $5")
-    url = wallet.create_checkout_session(user_id, req.amount_usd)
+    try:
+        url = wallet.create_checkout_session(user_id, req.tier_usd)
+    except wallet.InvalidTier as e:
+        raise HTTPException(400, str(e)) from e
     return {"checkout_url": url}
 
 
@@ -147,18 +160,39 @@ def balance(user_id: str = Depends(get_user_id)):
     return {"balance_usd": wallet.get_balance(user_id)}
 
 
-@app.post("/stripe/webhook")
-async def stripe_webhook(request: Request,
-                          stripe_signature: str = Header(None)):
-    payload = await request.body()
-    try:
-        event = stripe.Webhook.construct_event(
-            payload, stripe_signature, os.environ["STRIPE_WEBHOOK_SECRET"])
-    except (ValueError, stripe.error.SignatureVerificationError) as e:
-        raise HTTPException(400, f"invalid webhook: {e}") from e
+_paddle_webhook_verifier = Verifier()
 
-    if event["type"] == "checkout.session.completed":
-        wallet.handle_checkout_completed_webhook(event)
+
+class _PaddleWebhookRequest:
+    """Adapter satisfying paddle_billing's Request protocol (needs .body
+    as bytes and .headers with a .get(key, default) method). FastAPI's
+    own Request exposes body only via an async method, and Starlette's
+    Headers already implements .get() -- confirmed both against the
+    installed SDK's actual Protocol definitions, not guessed."""
+    def __init__(self, body: bytes, headers) -> None:
+        self.body = body
+        self.content = body
+        self.data = body
+        self.headers = headers
+
+
+@app.post("/paddle/webhook")
+async def paddle_webhook(request: Request):
+    raw_body = await request.body()
+    wrapped_request = _PaddleWebhookRequest(raw_body, request.headers)
+    secret = Secret(os.environ["PADDLE_WEBHOOK_SECRET"])
+
+    try:
+        is_valid = _paddle_webhook_verifier.verify(wrapped_request, secret)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, f"webhook verification error: {e}") from e
+    if not is_valid:
+        raise HTTPException(400, "invalid Paddle webhook signature")
+
+    import json
+    payload = json.loads(raw_body)
+    if payload.get("event_type") == "transaction.completed":
+        wallet.handle_transaction_completed_webhook(payload)
     return {"received": True}
 
 

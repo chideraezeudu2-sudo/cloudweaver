@@ -62,6 +62,13 @@ def meter_once() -> dict:
 
         try:
             wallet.meter_job_usage(user_id, job_id, seconds, price_per_hour)
+            db.set_low_balance_warning(job_id, False)
+        except wallet.LowBalanceWarning as w:
+            # Debit succeeded -- this just flags the job so `gpu-deploy
+            # jobs` shows a warning + the customer can top up before the
+            # grace buffer runs out. Not an error.
+            db.set_low_balance_warning(job_id, True)
+            logger.info("job %s low balance: %s", job_id, w)
         except wallet.InsufficientBalance:
             _terminate(job, adapters, "terminated_no_balance")
             summary["terminated"] += 1

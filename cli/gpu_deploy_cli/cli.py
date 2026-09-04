@@ -58,13 +58,16 @@ def login(api_key: str, backend_url: str):
 
 
 @cli.command("add-funds")
-@click.argument("amount", type=float)
-def add_funds(amount: float):
-    """Get a Stripe checkout link to add credits to your wallet.
+@click.argument("tier", type=click.Choice(["5", "10", "20", "50", "100"]))
+def add_funds(tier: str):
+    """Get a Paddle checkout link to add credits to your wallet.
+
+    Paddle requires picking from a fixed set of amounts rather than
+    typing any dollar figure -- $5 / $10 / $20 / $50 / $100.
 
     Example: gpu-deploy add-funds 20
     """
-    resp = _api("POST", "/wallet/add-funds", json={"amount_usd": amount})
+    resp = _api("POST", "/wallet/add-funds", json={"tier_usd": int(tier)})
     url = resp.json()["checkout_url"]
     click.echo(f"Complete payment here: {url}")
 
@@ -115,10 +118,12 @@ def run(gpu_model: str, num_gpus: int, image: str, max_hours: float):
 def jobs():
     """List your recent jobs and their cost."""
     resp = _api("GET", "/jobs")
-    for job in resp.json():
+    for job in resp.json()["jobs"]:
+        warning = "  ⚠ balance low -- run `gpu-deploy add-funds`" \
+            if job.get("low_balance_warning") else ""
         click.echo(f"{job['id'][:8]}  {job['provider']:12}  "
                    f"{job['gpu_model']:10}  ${job['price_per_hour']:.3f}/hr  "
-                   f"{job['status']}")
+                   f"{job['status']}{warning}")
 
 
 if __name__ == "__main__":

@@ -107,3 +107,12 @@ def update_job_status(job_id: str, status: str,
     if ended_at:
         payload["ended_at"] = ended_at
     db.table("jobs").update(payload).eq("id", job_id).execute()
+
+
+def set_low_balance_warning(job_id: str, warning: bool) -> None:
+    """Flip the low-balance flag on a job row so `gpu-deploy jobs` and the
+    next CLI poll can surface it -- Paddle can't silently auto-reload a
+    one-off top-up the way Stripe could, so a visible warning + a fresh
+    top-up link is the substitute (see core/wallet.py docstring)."""
+    get_supabase().table("jobs").update(
+        {"low_balance_warning": warning}).eq("id", job_id).execute()
