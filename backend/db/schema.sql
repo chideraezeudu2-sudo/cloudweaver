@@ -75,9 +75,16 @@ begin
     -- Only increment the balance if this session id hasn't been recorded
     -- before -- a retried/replayed webhook for the same transaction is a
     -- silent no-op instead of a double credit.
+    --
+    -- The index above is PARTIAL (WHERE stripe_session_id IS NOT NULL),
+    -- so Postgres requires this ON CONFLICT clause to repeat that exact
+    -- predicate to use the index as the arbiter -- omitting it makes
+    -- Postgres unable to find ANY matching unique constraint and raises
+    -- 42P10 on every call. Found live by an end-to-end webhook replay
+    -- test, not caught by reading the function definition back alone.
     insert into ledger_entries (user_id, amount_usd, kind, stripe_session_id)
     values (p_user_id, p_amount, 'stripe_topup', p_stripe_session_id)
-    on conflict (stripe_session_id) do nothing
+    on conflict (stripe_session_id) where stripe_session_id is not null do nothing
     returning id into v_inserted_id;
 
     if v_inserted_id is not null then
