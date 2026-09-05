@@ -135,6 +135,16 @@ def privacy_page() -> str:
     return legal_content.PRIVACY_PAGE
 
 
+@app.get("/pricing", response_class=HTMLResponse)
+def pricing_page() -> str:
+    return legal_content.PRICING_PAGE
+
+
+@app.get("/refund", response_class=HTMLResponse)
+def refund_page() -> str:
+    return legal_content.REFUND_PAGE
+
+
 @app.get("/pay", response_class=HTMLResponse)
 def pay_page() -> str:
     """

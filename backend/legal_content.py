@@ -45,7 +45,7 @@ cloudweaver run --gpu RTX_4090</code></pre>
 <h2>Pricing</h2>
 <p>Pay-as-you-go from a prepaid wallet, billed per second of actual GPU
 usage. Top up in fixed amounts of $5, $10, $20, $50, or $100. No
-subscription, no minimum commitment.</p>
+subscription, no minimum commitment. See full <a href="/pricing">pricing details</a>.</p>
 
 <h2>A note on the cheapest tier</h2>
 <p>The lowest prices come from interruptible/spot capacity, which cloud
@@ -55,10 +55,103 @@ immediately -- you are never charged for compute that was reclaimed
 before your job finished.</p>
 
 <footer>
+  <a href="/pricing">Pricing</a> &middot;
   <a href="/terms">Terms of Service</a> &middot;
   <a href="/privacy">Privacy Policy</a> &middot;
+  <a href="/refund">Refund Policy</a> &middot;
   Contact: <a href="mailto:{SUPPORT_EMAIL}">{SUPPORT_EMAIL}</a>
 </footer>
+</body></html>"""
+
+PRICING_PAGE = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Pricing - Cloud Weaver</title>{_PAGE_STYLE}</head>
+<body>
+<h1>Pricing</h1>
+<p>Pay-as-you-go, billed per second of actual GPU usage from a prepaid
+wallet. No subscription, no minimum commitment, no charge for any
+reservation attempt that fails our availability/hardware verification --
+you're only ever billed for a verified, working machine you actually
+used.</p>
+
+<h2>Adding funds</h2>
+<p>Top up your wallet in one of five fixed amounts:</p>
+<ul>
+  <li>$5</li>
+  <li>$10</li>
+  <li>$20</li>
+  <li>$50</li>
+  <li>$100</li>
+</ul>
+<p>Payment is processed by Paddle.com (our merchant of record); all
+standard card payment methods Paddle supports are accepted.</p>
+
+<h2>GPU pricing</h2>
+<p>GPU rental prices vary by model, provider, and real-time market
+availability -- Cloud Weaver searches live marketplace pricing at the
+moment you request a machine and charges a margin on top of our own
+cost. Run <code>cloudweaver run --gpu &lt;model&gt;</code> to see the
+current verified price before committing.</p>
+
+<h2>What you're not charged for</h2>
+<ul>
+  <li>Any reservation attempt that fails our live availability check
+      ("ghost inventory")</li>
+  <li>Any machine that fails our boot-time hardware benchmark (power
+      draw / throughput below spec)</li>
+  <li>Compute time after a provider reclaims an interruptible instance
+      mid-job -- see our <a href="/refund">Refund Policy</a></li>
+</ul>
+
+<footer><a href="/">Back to Cloud Weaver</a> &middot;
+  <a href="/pricing">Pricing</a> &middot; <a href="/terms">Terms</a> &middot;
+  <a href="/privacy">Privacy</a> &middot; <a href="/refund">Refund Policy</a></footer>
+</body></html>"""
+
+REFUND_PAGE = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Refund Policy - Cloud Weaver</title>{_PAGE_STYLE}</head>
+<body>
+<h1>Refund Policy</h1>
+<p><em>Last updated: 2026</em></p>
+
+<h2>Wallet top-ups</h2>
+<p>Funds added to your Cloud Weaver wallet are used to pay for verified
+GPU compute time as you use it. If you have unused wallet balance and
+no longer wish to use the service, contact us at
+<a href="mailto:{SUPPORT_EMAIL}">{SUPPORT_EMAIL}</a> and we will refund
+your remaining, unused balance.</p>
+
+<h2>Automatic non-billing for failed or interrupted service</h2>
+<p>You are never charged in the following situations -- these aren't
+"refunds" you need to request, they're built into how billing works:</p>
+<ul>
+  <li><strong>A listed GPU turns out to be unavailable</strong> when we
+      attempt to reserve it ("ghost inventory") -- we silently try the
+      next-cheapest verified option, and you're never billed for the
+      failed attempt.</li>
+  <li><strong>A machine fails our boot-time hardware check</strong>
+      (measured power draw or throughput below the advertised spec) --
+      same as above, discarded before you're ever charged.</li>
+  <li><strong>An interruptible/spot instance is reclaimed by the
+      provider mid-job</strong> -- our metering system detects this
+      automatically (typically within 5 minutes) and stops billing your
+      wallet from that point forward. You are not charged for the time
+      after the instance was reclaimed.</li>
+</ul>
+
+<h2>Requesting a refund for a billing error</h2>
+<p>If you believe you were incorrectly charged for something not covered
+above, email <a href="mailto:{SUPPORT_EMAIL}">{SUPPORT_EMAIL}</a> with
+your account email and the approximate time of the charge. We aim to
+respond within a few business days.</p>
+
+<h2>Chargebacks</h2>
+<p>We'd rather resolve a billing problem directly -- please contact us
+before filing a chargeback with your card provider, so we can look into
+it and refund you directly if something went wrong.</p>
+
+<footer><a href="/">Back to Cloud Weaver</a> &middot;
+  <a href="/pricing">Pricing</a> &middot; <a href="/terms">Terms</a> &middot;
+  <a href="/privacy">Privacy</a> &middot; <a href="/refund">Refund Policy</a></footer>
 </body></html>"""
 
 TERMS_PAGE = f"""<!DOCTYPE html>
@@ -115,7 +208,9 @@ service after a change constitutes acceptance of the updated terms.</p>
 <h2>8. Contact</h2>
 <p>Questions about these terms: <a href="mailto:{SUPPORT_EMAIL}">{SUPPORT_EMAIL}</a></p>
 
-<footer><a href="/">Back to Cloud Weaver</a></footer>
+<footer><a href="/">Back to Cloud Weaver</a> &middot;
+  <a href="/pricing">Pricing</a> &middot; <a href="/terms">Terms</a> &middot;
+  <a href="/privacy">Privacy</a> &middot; <a href="/refund">Refund Policy</a></footer>
 </body></html>"""
 
 PRIVACY_PAGE = f"""<!DOCTYPE html>
@@ -163,5 +258,7 @@ account by emailing <a href="mailto:{SUPPORT_EMAIL}">{SUPPORT_EMAIL}</a>.</p>
 <h2>Contact</h2>
 <p><a href="mailto:{SUPPORT_EMAIL}">{SUPPORT_EMAIL}</a></p>
 
-<footer><a href="/">Back to Cloud Weaver</a></footer>
+<footer><a href="/">Back to Cloud Weaver</a> &middot;
+  <a href="/pricing">Pricing</a> &middot; <a href="/terms">Terms</a> &middot;
+  <a href="/privacy">Privacy</a> &middot; <a href="/refund">Refund Policy</a></footer>
 </body></html>"""
