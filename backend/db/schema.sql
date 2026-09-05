@@ -39,7 +39,7 @@ create table jobs (
     benchmark_power_watts numeric(6, 1),
     benchmark_tflops numeric(6, 2),
     max_hours numeric(10, 4) not null default 4,     -- customer's requested max runtime (metering stop)
-    status text not null default 'running',   -- 'running' | 'completed' | 'terminated_no_balance' | 'failed'
+    status text not null default 'running',   -- 'running' | 'completed' | 'terminated_no_balance' | 'terminated_preempted' | 'failed'
     started_at timestamptz not null default now(),
     last_metered_at timestamptz not null default now(),  -- end of last billed interval
     ended_at timestamptz,

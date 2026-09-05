@@ -18,6 +18,7 @@ import os
 from datetime import datetime, timezone
 
 from core import db, wallet
+from providers.base import Instance, ProviderError
 from providers.registry import get_all_adapters
 
 logging.basicConfig(level=logging.INFO)
@@ -59,6 +60,45 @@ def meter_once() -> dict:
             _terminate(job, adapters, "completed")
             summary["terminated"] += 1
             continue
+
+        # Preemption check: confirm the instance is ACTUALLY still alive on
+        # the provider's side before billing it, not just that time has
+        # passed. Spot/interruptible capacity (what makes the cheap tier
+        # cheap) can be reclaimed by the provider for a higher bidder at
+        # any moment -- without this check, a preempted job would keep
+        # accumulating charges against a machine that no longer exists,
+        # and the customer would be billed for compute they never got.
+        provider = job["provider"]
+        instance_id = job["provider_instance_id"]
+        adapter = adapters.get(provider)
+        if adapter is not None:
+            try:
+                instance: Instance = adapter.get_instance_status(instance_id)
+                still_alive = instance.status not in ("failed", "terminated")
+            except ProviderError:
+                # Most common real-world cause here: the provider returns
+                # a not-found error because the instance was reclaimed --
+                # treat any status-check failure as "assume it's gone"
+                # rather than "assume it's fine and keep billing."
+                still_alive = False
+
+            if not still_alive:
+                logger.warning(
+                    "job %s (%s/%s) is no longer alive on the provider -- "
+                    "treating as preempted, not billing past last_metered_at",
+                    job_id, provider, instance_id,
+                )
+                # Deliberately skip wallet.meter_job_usage() for this tick
+                # -- the customer is not charged for time on a machine
+                # that was pulled out from under them. This is a business
+                # decision, not just a technical one: charging here is
+                # what turns an infrastructure hiccup into a chargeback.
+                _terminate(job, adapters, "terminated_preempted")
+                summary["terminated"] += 1
+                continue
+        else:
+            logger.warning("no adapter for provider %s -- cannot verify job "
+                            "%s is still alive, billing anyway", provider, job_id)
 
         try:
             wallet.meter_job_usage(user_id, job_id, seconds, price_per_hour)

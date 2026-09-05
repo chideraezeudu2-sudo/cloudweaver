@@ -180,7 +180,39 @@ isn't already taken on PyPI before this step (likely needs a rename;
       provider (call it twice, second call shouldn't error) — the broker's
       fallback path depends on this.
 
-## 8. Explicitly out of scope for v1 (do not build these yet)
+## 8. Spot preemption: what's handled now vs. deferred
+
+Interruptible/spot capacity (what makes the cheap tier cheap) can be
+reclaimed by the provider for a higher bidder at any moment. Three-stage
+plan, only stage 1 is built:
+
+**Stage 1 (DONE, this commit)** -- detect + don't overbill. The metering
+loop now checks the instance is actually still alive on the provider's
+side before billing each interval (`core/metering.py`). If the provider
+reports it gone, the job is marked `terminated_preempted` and billing
+simply stops -- the customer is never charged for compute they didn't
+get. This was a deliberate business decision, not just a technical one:
+billing for preempted time is what turns an infrastructure hiccup into a
+Paddle chargeback.
+
+**Stage 2 (documented convention, not yet enforced in code)** -- customers
+who want resumable long-running jobs should have their script periodically
+write progress to `/checkpoint` inside the instance. This directory isn't
+currently backed by anything special -- it's a convention being
+established now so Stage 3 doesn't require customers to change their
+scripts later. Document this in the CLI's `run` command help text once
+Stage 3 exists; no code change needed until then.
+
+**Stage 3 (future, not started)** -- on detecting preemption, instead of
+just terminating, copy `/checkpoint`'s contents somewhere durable
+(off-instance, since the dead machine may be unreachable), reserve a new
+instance via the normal broker fallback chain, restore `/checkpoint`
+there, and resume the customer's job. This only works for jobs whose own
+code actually writes to `/checkpoint` -- it can't magically save an
+arbitrary program's progress, same limitation SkyPilot has. Needs Stage 1
+proven in production first.
+
+## 9. Explicitly out of scope for v1 (do not build these yet)
 
 - Any web dashboard or frontend — Stripe Checkout's hosted page covers
   fund-adding, the CLI covers everything else.
@@ -188,7 +220,6 @@ isn't already taken on PyPI before this step (likely needs a rename;
   the marketing-site ideas from the original pitch doc — those are
   post-traction, not pre-launch.
 - Support for more than the 5 providers above.
-- Preemption/checkpoint-resume handling for interruptible instances —
-  v1's fallback chain handles reservation-time failures, not a card being
-  reclaimed mid-job. That's a real gap for long training runs; scope it
-  as a fast-follow once the core loop is proven.
+- Stage 3 checkpoint/auto-resume from section 8 above — that's a real
+  gap for long training runs; scope it as a fast-follow once Stage 1 is
+  proven in production, not before.
