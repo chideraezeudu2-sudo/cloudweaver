@@ -1,4 +1,14 @@
-# GPU Broker — Build Spec for OpenHands
+# Cloud Weaver — Build Spec for OpenHands
+
+> **Note on freshness:** this document was written before launch and much
+> of its body (provider count, Stripe references, "nothing tested against
+> live accounts") describes that earlier state, not where the project is
+> now. See README.md's "Status" section for what's actually true today.
+> Treat this file as a historical build log plus §8 (preemption) and §9
+> (out of scope), which are current -- everything else needs a read
+> against the actual repo/live service before trusting it verbatim. A
+> full rewrite of this document is a planned production-readiness task,
+> not yet done.
 
 Owner (Francis) holds every account and API key. This document is everything
 needed to take the code in `backend/` and `cli/` from "written against
@@ -19,7 +29,7 @@ the sequence you should actually do them in.
   a common interface in `providers/base.py`. `core/broker.py` is the
   probe→reserve→benchmark→fallback state machine. `core/wallet.py` is the
   Stripe/Supabase billing layer. `db/schema.sql` is the Postgres schema.
-- `cli/` — the entire customer-facing product. `gpu-deploy login`,
+- `cli/` — the entire customer-facing product. `cloudweaver login`,
   `add-funds`, `balance`, `run`, `jobs`. No dashboard, no website — that's
   intentional, not a gap.
 
@@ -97,7 +107,7 @@ BROKER_SSH_PRIVATE_KEY_PATH=/etc/secrets/broker_key   (Render secret file path)
 - **Signup flow**: there's no `/signup` endpoint at all yet. Simplest v1:
   a `POST /signup {email}` that creates a `users` row, generates an API
   key, emails it or returns it directly in the response (fine for a v1
-  aimed at developers who'll pipe it straight into `gpu-deploy login`).
+  aimed at developers who'll pipe it straight into `cloudweaver login`).
 
 ## 4. Provider adapters — confirm against live accounts before trusting them
 
@@ -156,9 +166,9 @@ python -m build
 twine upload dist/*
 ```
 
-After that, anyone can `pip install gpu-deploy` — confirm the package name
+After that, anyone can `pip install cloudweaver` — confirm the package name
 isn't already taken on PyPI before this step (likely needs a rename;
-`gpu-deploy` is a common enough phrase that it may collide).
+`cloudweaver` is a common enough phrase that it may collide).
 
 ## 7. Testing checklist before any real customer runs a job
 

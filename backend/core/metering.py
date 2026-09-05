@@ -104,7 +104,7 @@ def meter_once() -> dict:
             wallet.meter_job_usage(user_id, job_id, seconds, price_per_hour)
             db.set_low_balance_warning(job_id, False)
         except wallet.LowBalanceWarning as w:
-            # Debit succeeded -- this just flags the job so `gpu-deploy
+            # Debit succeeded -- this just flags the job so `cloudweaver
             # jobs` shows a warning + the customer can top up before the
             # grace buffer runs out. Not an error.
             db.set_low_balance_warning(job_id, True)

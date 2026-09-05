@@ -26,7 +26,7 @@ from core.broker import NoCapacityAvailable, quote_and_reserve
 from core.metering import meter_once
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("gpu-broker")
+logger = logging.getLogger("cloudweaver")
 
 # In-app metering loop (BUILD_SPEC §5, free-tier variant). Because Render's
 # free web services spin down after 15 min of no inbound traffic, we:
@@ -49,6 +49,11 @@ async def _meter_loop():
         await asyncio.sleep(METER_INTERVAL_SECONDS)
 
 
+# NOTE: this default value is the ACTUAL live Render URL, not just a
+# brand placeholder -- do not change it without also updating Paddle's
+# webhook destination and default payment link to match, or checkout
+# and webhook delivery will break. Cosmetic rebrand (Cloud Weaver) does
+# NOT include renaming this yet -- see render.yaml's note on the same.
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://gpu-broker-api.onrender.com")
 
 
@@ -84,7 +89,7 @@ async def lifespan(app: FastAPI):
         await asyncio.gather(*tasks, return_exceptions=True)
 
 
-app = FastAPI(title="GPU Broker API", lifespan=lifespan)
+app = FastAPI(title="Cloud Weaver API", lifespan=lifespan)
 
 # Path to a broker-owned SSH keypair used to access every instance we
 # provision, across all providers -- generate this once during deploy
@@ -96,13 +101,13 @@ BROKER_SSH_PRIVATE_KEY_PATH = os.environ["BROKER_SSH_PRIVATE_KEY_PATH"]
 @app.get("/health")
 def health() -> dict:
     """Health: also used by the in-app keepalive loop."""
-    return {"status": "ok", "service": "gpu-broker-api"}
+    return {"status": "ok", "service": "cloudweaver-api"}
 
 
 @app.get("/")
 def root() -> dict:
     """Health check: Render probes this path to decide the deploy is live."""
-    return {"status": "ok", "service": "gpu-broker-api"}
+    return {"status": "ok", "service": "cloudweaver-api"}
 
 
 PADDLE_CLIENT_TOKEN = os.environ.get("PADDLE_CLIENT_TOKEN", "")

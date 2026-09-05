@@ -110,7 +110,7 @@ def update_job_status(job_id: str, status: str,
 
 
 def set_low_balance_warning(job_id: str, warning: bool) -> None:
-    """Flip the low-balance flag on a job row so `gpu-deploy jobs` and the
+    """Flip the low-balance flag on a job row so `cloudweaver jobs` and the
     next CLI poll can surface it -- Paddle can't silently auto-reload a
     one-off top-up the way Stripe could, so a visible warning + a fresh
     top-up link is the substitute (see core/wallet.py docstring)."""

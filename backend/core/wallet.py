@@ -148,13 +148,13 @@ def reserve_for_job(user_id: str, estimated_max_cost_usd: float) -> None:
 
     No auto-reload attempt here (Paddle can't do off-session top-ups for
     a one-off purchase) -- this just raises, and the CLI tells the
-    customer to run `gpu-deploy add-funds` first.
+    customer to run `cloudweaver add-funds` first.
     """
     balance = get_balance(user_id)
     if balance < estimated_max_cost_usd:
         raise InsufficientBalance(
             f"balance ${balance:.2f} insufficient for estimated "
-            f"${estimated_max_cost_usd:.2f} -- run `gpu-deploy add-funds`"
+            f"${estimated_max_cost_usd:.2f} -- run `cloudweaver add-funds`"
         )
 
 

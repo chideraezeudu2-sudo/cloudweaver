@@ -1,9 +1,9 @@
 """
-gpu-deploy CLI. This is the ENTIRE v1 product surface, on purpose --
+cloudweaver CLI. This is the ENTIRE v1 product surface, on purpose --
 no website, no dashboard. Every command just calls the backend API.
 
 Install: pip install -e .   (see cli/pyproject.toml)
-Config: stores the API key + backend URL in ~/.gpu-deploy/config.json
+Config: stores the API key + backend URL in ~/.cloudweaver/config.json
 """
 
 from __future__ import annotations
@@ -17,13 +17,13 @@ from pathlib import Path
 import click
 import requests
 
-CONFIG_DIR = Path.home() / ".gpu-deploy"
+CONFIG_DIR = Path.home() / ".cloudweaver"
 CONFIG_PATH = CONFIG_DIR / "config.json"
 
 
 def _load_config() -> dict:
     if not CONFIG_PATH.exists():
-        click.echo("Not logged in. Run `gpu-deploy login` first.", err=True)
+        click.echo("Not logged in. Run `cloudweaver login` first.", err=True)
         sys.exit(1)
     return json.loads(CONFIG_PATH.read_text())
 
@@ -42,7 +42,7 @@ def _api(method: str, path: str, **kwargs) -> requests.Response:
 
 @click.group()
 def cli():
-    """gpu-deploy — rent the cheapest verified-available GPU, from your terminal."""
+    """cloudweaver — rent the cheapest verified-available GPU, from your terminal."""
 
 
 @cli.command()
@@ -65,7 +65,7 @@ def add_funds(tier: str):
     Paddle requires picking from a fixed set of amounts rather than
     typing any dollar figure -- $5 / $10 / $20 / $50 / $100.
 
-    Example: gpu-deploy add-funds 20
+    Example: cloudweaver add-funds 20
     """
     resp = _api("POST", "/wallet/add-funds", json={"tier_usd": int(tier)})
     url = resp.json()["checkout_url"]
@@ -92,7 +92,7 @@ def run(gpu_model: str, num_gpus: int, image: str, max_hours: float):
     silently skipped -- what you get back has already passed a live boot
     benchmark.
 
-    Example: gpu-deploy run --gpu RTX_4090
+    Example: cloudweaver run --gpu RTX_4090
     """
     click.echo(f"Searching for {gpu_model} x{num_gpus}, verifying "
                f"availability and running boot benchmark (this can take "
@@ -119,7 +119,7 @@ def jobs():
     """List your recent jobs and their cost."""
     resp = _api("GET", "/jobs")
     for job in resp.json()["jobs"]:
-        warning = "  ⚠ balance low -- run `gpu-deploy add-funds`" \
+        warning = "  ⚠ balance low -- run `cloudweaver add-funds`" \
             if job.get("low_balance_warning") else ""
         click.echo(f"{job['id'][:8]}  {job['provider']:12}  "
                    f"{job['gpu_model']:10}  ${job['price_per_hour']:.3f}/hr  "

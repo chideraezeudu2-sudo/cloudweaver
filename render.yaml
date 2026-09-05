@@ -1,5 +1,14 @@
-# Render blueprint: GPU Broker backend web service.
+# Render blueprint: Cloud Weaver backend web service.
 # See BUILD_SPEC.md for full setup context.
+#
+# NOTE ON THE SERVICE NAME BELOW: it's still "gpu-broker-api" even though
+# the product is now branded Cloud Weaver -- deliberately NOT renamed.
+# Renaming a Render service changes its .onrender.com URL, which Paddle's
+# webhook destination and default payment link are already configured
+# against live. Change this only as part of a deliberate custom-domain
+# migration (see BUILD_SPEC.md), never as a casual rebrand, or checkout
+# and webhook delivery will break until every dependent config is updated
+# in lockstep.
 #
 # ARCHITECTURE NOTE: metering runs IN-APP (see backend/main.py's
 # _meter_loop/_keepalive_loop), not as a separate Render Cron Job --

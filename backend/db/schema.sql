@@ -1,4 +1,4 @@
--- GPU broker schema. Run this in the Supabase SQL editor for a new project.
+-- Cloud Weaver schema. Run this in the Supabase SQL editor for a new project.
 -- Uses Postgres functions for wallet credit/debit so balance changes are
 -- atomic and ledgered together -- never update wallets.balance_usd
 -- directly from application code.

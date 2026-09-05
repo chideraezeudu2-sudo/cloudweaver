@@ -1,7 +1,7 @@
 [project]
-name = "gpu-deploy"
+name = "cloudweaver"
 version = "0.1.0"
-description = "Rent the cheapest verified-available GPU from your terminal"
+description = "Rent the cheapest verified-available GPU from your terminal -- Cloud Weaver weaves together multiple GPU marketplaces, verifies every machine before you're billed for it"
 requires-python = ">=3.9"
 dependencies = [
     "click==8.1.7",
@@ -9,7 +9,7 @@ dependencies = [
 ]
 
 [project.scripts]
-gpu-deploy = "gpu_deploy_cli.cli:cli"
+cloudweaver = "cloudweaver_cli.cli:cli"
 
 [build-system]
 requires = ["setuptools>=68"]
