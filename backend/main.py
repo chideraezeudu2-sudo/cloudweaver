@@ -21,6 +21,8 @@ from fastapi.responses import HTMLResponse
 from paddle_billing.Notifications import Secret, Verifier
 from pydantic import BaseModel
 
+import legal_content
+
 from core import db, wallet
 from core.broker import NoCapacityAvailable, quote_and_reserve
 from core.metering import meter_once
@@ -111,6 +113,26 @@ def root() -> dict:
 
 
 PADDLE_CLIENT_TOKEN = os.environ.get("PADDLE_CLIENT_TOKEN", "")
+
+
+@app.get("/about", response_class=HTMLResponse)
+def about_page() -> str:
+    """Product description page -- exists specifically so Paddle's live
+    domain review has a real page to look at without needing a purchased
+    domain. Deliberately NOT at '/' since Render's health check and the
+    in-app keepalive both depend on that path returning the JSON status
+    body, not HTML."""
+    return legal_content.ABOUT_PAGE
+
+
+@app.get("/terms", response_class=HTMLResponse)
+def terms_page() -> str:
+    return legal_content.TERMS_PAGE
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy_page() -> str:
+    return legal_content.PRIVACY_PAGE
 
 
 @app.get("/pay", response_class=HTMLResponse)
