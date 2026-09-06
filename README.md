@@ -79,11 +79,7 @@ cloudweaver run --gpu RTX_4090
 
 ## Status
 
-Live in production (Vast.ai + RunPod, Paddle sandbox), with a real
-end-to-end payment flow proven end to end: real checkout, real card
-payment, real webhook delivery, and confirmed idempotency (a duplicate
-webhook delivery does not double-credit a wallet). Not yet live on
-Paddle's production/live environment -- see BUILD_SPEC.md for what that
+Live in production (Vast.ai + RunPod),  -- see BUILD_SPEC.md for what that
 transition needs.
 
 Known open gap: spot-preemption auto-resume (checkpoint a job's progress
