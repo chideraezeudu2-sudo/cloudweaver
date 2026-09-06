@@ -196,6 +196,26 @@ def add_funds(req: AddFundsRequest, user_id: str = Depends(get_user_id)):
         url = wallet.create_checkout_session(user_id, req.amount_usd)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
+    except stripe.error.PermissionError as e:
+        # Restricted API key missing a required scope (e.g. Checkout
+        # Sessions write) -- surface this distinctly since it's an
+        # account-configuration problem, not a customer-facing one.
+        raise HTTPException(
+            502, f"payment processor misconfigured (key permission "
+                 f"error): {e.user_message or str(e)}"
+        ) from e
+    except stripe.error.AuthenticationError as e:
+        raise HTTPException(
+            502, f"payment processor misconfigured (invalid/revoked "
+                 f"key): {e.user_message or str(e)}"
+        ) from e
+    except stripe.error.StripeError as e:
+        # Catch-all for any other Stripe API error -- found by a live
+        # test where an unhandled Stripe error surfaced as a bare,
+        # detail-free 500. Never let a real error vanish silently again.
+        raise HTTPException(
+            502, f"payment processor error: {e.user_message or str(e)}"
+        ) from e
     return {"checkout_url": url}
 
 
