@@ -68,8 +68,14 @@ def create_checkout_session(user_id: str, amount_usd: float) -> str:
         }],
         payment_intent_data={"setup_future_usage": "off_session"},
         client_reference_id=user_id,
-        success_url=f"{os.environ.get('PUBLIC_URL', '')}/pay/success?session_id={{CHECKOUT_SESSION_ID}}",
-        cancel_url=f"{os.environ.get('PUBLIC_URL', '')}/pay/cancelled",
+        # Default here MUST match main.py's PUBLIC_URL fallback -- an
+        # earlier version defaulted to '' here, which produced a
+        # relative URL and made Stripe reject the whole request with
+        # "Not a valid URL" (found live by OpenHands). Also: /pay no
+        # longer exists (removed when Paddle's own checkout page became
+        # unnecessary for Stripe) -- point at /about instead, which does.
+        success_url=f"{os.environ.get('PUBLIC_URL', 'https://gpu-broker-api.onrender.com')}/about?funded=1&session_id={{CHECKOUT_SESSION_ID}}",
+        cancel_url=f"{os.environ.get('PUBLIC_URL', 'https://gpu-broker-api.onrender.com')}/about?cancelled=1",
     )
     return session.url
 
