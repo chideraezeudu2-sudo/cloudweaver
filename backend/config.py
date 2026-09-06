@@ -11,10 +11,9 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_service_role_key: str = ""  # server-side key, never exposed to CLI
 
-    # --- Paddle ---
-    paddle_api_key: str = ""
-    paddle_webhook_secret: str = ""
-    paddle_env: str = "sandbox"  # "sandbox" or "production"
+    # --- Stripe ---
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
 
     # --- Provider API keys (yours — you hold these, not the customer) ---
     vast_api_key: str = ""

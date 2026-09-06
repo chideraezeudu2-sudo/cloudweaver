@@ -17,8 +17,8 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
+import stripe
 from fastapi.responses import HTMLResponse
-from paddle_billing.Notifications import Secret, Verifier
 from pydantic import BaseModel
 
 import legal_content
@@ -112,16 +112,12 @@ def root() -> dict:
     return {"status": "ok", "service": "cloudweaver-api"}
 
 
-PADDLE_CLIENT_TOKEN = os.environ.get("PADDLE_CLIENT_TOKEN", "")
-
-
 @app.get("/about", response_class=HTMLResponse)
 def about_page() -> str:
-    """Product description page -- exists specifically so Paddle's live
-    domain review has a real page to look at without needing a purchased
-    domain. Deliberately NOT at '/' since Render's health check and the
-    in-app keepalive both depend on that path returning the JSON status
-    body, not HTML."""
+    """Product description page. Originally added for Paddle's live
+    domain review requirement (see git history) -- kept regardless of
+    which payment processor is active, since a real product page is
+    good practice independent of that."""
     return legal_content.ABOUT_PAGE
 
 
@@ -145,51 +141,13 @@ def refund_page() -> str:
     return legal_content.REFUND_PAGE
 
 
-@app.get("/pay", response_class=HTMLResponse)
-def pay_page() -> str:
-    """
-    Paddle's default payment link (set in the Paddle dashboard's Checkout
-    Settings) must point HERE, not at the bare API root -- Paddle appends
-    `?_ptxn=txn_...` to whatever URL is configured there, and that page
-    must load Paddle.js for a checkout to actually render. The API root
-    only ever served JSON, which is why checkout URLs returned by
-    /wallet/add-funds loaded a blank JSON blob instead of a payment form
-    (found and diagnosed by OpenHands against Paddle's own documented
-    default-payment-link behavior).
-
-    Per Paddle's docs, Paddle.js auto-detects a `_ptxn` transaction id in
-    the page's own URL and opens the checkout for it automatically once
-    initialized -- this page does nothing but load and initialize
-    Paddle.js; it doesn't need to read the query param itself. That
-    auto-open behavior is documented but has not been exercised against
-    a real browser here -- confirm it actually renders before trusting
-    this as fully done, same as everything else flagged along the way.
-    """
-    if not PADDLE_CLIENT_TOKEN:
-        return (
-            "<h1>Checkout misconfigured</h1>"
-            "<p>PADDLE_CLIENT_TOKEN is not set on the server. This is a "
-            "different value than PADDLE_API_KEY -- generate a Client-side "
-            "Token (not an API key) in the Paddle dashboard under "
-            "Developer Tools &rarr; Authentication, and set it as an env "
-            "var.</p>"
-        )
-    is_sandbox = os.environ.get("PADDLE_ENV", "sandbox") == "sandbox"
-    return f"""<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Complete your payment</title></head>
-<body>
-  <p>Loading checkout&hellip;</p>
-  <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
-  <script>
-    {"Paddle.Environment.set('sandbox');" if is_sandbox else ""}
-    Paddle.Initialize({{ token: "{PADDLE_CLIENT_TOKEN}" }});
-    // Paddle.js reads `_ptxn` from this page's own URL automatically and
-    // opens the matching checkout once initialized -- no manual call
-    // needed here per Paddle's documented default-payment-link behavior.
-  </script>
-</body>
-</html>"""
+# NOTE: no /pay route here. Stripe Checkout Sessions return a URL fully
+# hosted on stripe.com -- unlike Paddle's default-payment-link model,
+# we don't need to host our own page that loads a client-side SDK. If
+# Paddle's live account clears later and this project switches back
+# (see git history around commits a6b5ab1/8ec3c51 for that whole flow),
+# that page's code and PADDLE_CLIENT_TOKEN handling will need restoring
+# alongside it -- it isn't needed for Stripe.
 
 
 def get_user_id(authorization: str = Header(...)) -> str:
@@ -229,16 +187,14 @@ def signup(req: SignupRequest) -> dict:
 
 
 class AddFundsRequest(BaseModel):
-    # Paddle's catalog model wants one of the pre-defined tiers, not a
-    # freeform typed-in amount -- see wallet.PADDLE_PRICE_IDS.
-    tier_usd: int
+    amount_usd: float
 
 
 @app.post("/wallet/add-funds")
 def add_funds(req: AddFundsRequest, user_id: str = Depends(get_user_id)):
     try:
-        url = wallet.create_checkout_session(user_id, req.tier_usd)
-    except wallet.InvalidTier as e:
+        url = wallet.create_checkout_session(user_id, req.amount_usd)
+    except ValueError as e:
         raise HTTPException(400, str(e)) from e
     return {"checkout_url": url}
 
@@ -248,39 +204,18 @@ def balance(user_id: str = Depends(get_user_id)):
     return {"balance_usd": wallet.get_balance(user_id)}
 
 
-_paddle_webhook_verifier = Verifier()
-
-
-class _PaddleWebhookRequest:
-    """Adapter satisfying paddle_billing's Request protocol (needs .body
-    as bytes and .headers with a .get(key, default) method). FastAPI's
-    own Request exposes body only via an async method, and Starlette's
-    Headers already implements .get() -- confirmed both against the
-    installed SDK's actual Protocol definitions, not guessed."""
-    def __init__(self, body: bytes, headers) -> None:
-        self.body = body
-        self.content = body
-        self.data = body
-        self.headers = headers
-
-
-@app.post("/paddle/webhook")
-async def paddle_webhook(request: Request):
-    raw_body = await request.body()
-    wrapped_request = _PaddleWebhookRequest(raw_body, request.headers)
-    secret = Secret(os.environ["PADDLE_WEBHOOK_SECRET"])
-
+@app.post("/stripe/webhook")
+async def stripe_webhook(request: Request,
+                          stripe_signature: str = Header(None)):
+    payload = await request.body()
     try:
-        is_valid = _paddle_webhook_verifier.verify(wrapped_request, secret)
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(400, f"webhook verification error: {e}") from e
-    if not is_valid:
-        raise HTTPException(400, "invalid Paddle webhook signature")
+        event = stripe.Webhook.construct_event(
+            payload, stripe_signature, os.environ["STRIPE_WEBHOOK_SECRET"])
+    except (ValueError, stripe.error.SignatureVerificationError) as e:
+        raise HTTPException(400, f"invalid webhook: {e}") from e
 
-    import json
-    payload = json.loads(raw_body)
-    if payload.get("event_type") == "transaction.completed":
-        wallet.handle_transaction_completed_webhook(payload)
+    if event["type"] == "checkout.session.completed":
+        wallet.handle_checkout_completed_webhook(event)
     return {"received": True}
 
 

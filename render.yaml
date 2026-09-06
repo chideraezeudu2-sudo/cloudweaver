@@ -36,23 +36,9 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
-      - key: PADDLE_API_KEY
+      - key: STRIPE_SECRET_KEY
         sync: false
-      - key: PADDLE_CLIENT_TOKEN
-        sync: false
-      - key: PADDLE_WEBHOOK_SECRET
-        sync: false
-      - key: PADDLE_ENV
-        value: sandbox
-      - key: PADDLE_PRICE_ID_5
-        sync: false
-      - key: PADDLE_PRICE_ID_10
-        sync: false
-      - key: PADDLE_PRICE_ID_20
-        sync: false
-      - key: PADDLE_PRICE_ID_50
-        sync: false
-      - key: PADDLE_PRICE_ID_100
+      - key: STRIPE_WEBHOOK_SECRET
         sync: false
       - key: VAST_API_KEY
         sync: false

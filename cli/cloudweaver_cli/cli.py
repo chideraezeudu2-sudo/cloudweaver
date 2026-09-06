@@ -58,16 +58,13 @@ def login(api_key: str, backend_url: str):
 
 
 @cli.command("add-funds")
-@click.argument("tier", type=click.Choice(["5", "10", "20", "50", "100"]))
-def add_funds(tier: str):
-    """Get a Paddle checkout link to add credits to your wallet.
-
-    Paddle requires picking from a fixed set of amounts rather than
-    typing any dollar figure -- $5 / $10 / $20 / $50 / $100.
+@click.argument("amount", type=float)
+def add_funds(amount: float):
+    """Get a Stripe checkout link to add credits to your wallet.
 
     Example: cloudweaver add-funds 20
     """
-    resp = _api("POST", "/wallet/add-funds", json={"tier_usd": int(tier)})
+    resp = _api("POST", "/wallet/add-funds", json={"amount_usd": amount})
     url = resp.json()["checkout_url"]
     click.echo(f"Complete payment here: {url}")
 
