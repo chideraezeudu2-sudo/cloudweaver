@@ -1,0 +1,6 @@
+{
+  "name": "Cloud Weaver",
+  "description": "Rent the cheapest verified GPU from your terminal. Verifies availability and hardware performance before you are charged.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
